@@ -35,7 +35,17 @@ const AdCanvas = () => {
             selectElement(null); // Deselect to hide transformer
             setTimeout(() => {
                 if (stageRef.current) {
+                    // Hide Safe Zone for capture
+                    const safeZoneNodes = stageRef.current.find('.safe-zone-indicator');
+                    safeZoneNodes.forEach(node => node.hide());
+                    stageRef.current.batchDraw();
+
                     const uri = stageRef.current.toDataURL({ pixelRatio: 2 });
+
+                    // Restore Safe Zone
+                    safeZoneNodes.forEach(node => node.show());
+                    stageRef.current.batchDraw();
+
                     const link = document.createElement('a');
                     link.download = 'ad-design.png';
                     link.href = uri;
@@ -50,9 +60,18 @@ const AdCanvas = () => {
             selectElement(null);
             setTimeout(() => {
                 if (stageRef.current) {
+                    // Hide Safe Zone for capture
+                    const safeZoneNodes = stageRef.current.find('.safe-zone-indicator');
+                    safeZoneNodes.forEach(node => node.hide());
+                    stageRef.current.batchDraw();
+
                     stageRef.current.toBlob({
                         pixelRatio: 2,
                         callback: (blob) => {
+                            // Restore Safe Zone
+                            safeZoneNodes.forEach(node => node.show());
+                            stageRef.current.batchDraw();
+
                             window.dispatchEvent(new CustomEvent('export-data-ready', { detail: blob }));
                         }
                     });
@@ -177,11 +196,22 @@ const AdCanvas = () => {
                     ref={stageRef}
                 >
                     <Layer>
+                        {/* Background Layer - Essential for Export */}
+                        <Rect
+                            x={0}
+                            y={0}
+                            width={width}
+                            height={height}
+                            fill={background}
+                            listening={false} // Don't interfere with clicks
+                        />
+
                         {/* Safe Zone Indicator */}
                         {showSafeZone && safeZoneMargin > 0 && (
                             <React.Fragment>
                                 {/* Dashed Border for Safe Zone */}
                                 <Rect
+                                    name="safe-zone-indicator"
                                     x={safeZoneMargin}
                                     y={safeZoneMargin}
                                     width={width - (safeZoneMargin * 2)}
@@ -193,6 +223,7 @@ const AdCanvas = () => {
                                 />
                                 {/* Label */}
                                 <Text
+                                    name="safe-zone-indicator"
                                     x={safeZoneMargin + 5}
                                     y={safeZoneMargin + 5}
                                     text="SAFE ZONE"
@@ -266,6 +297,8 @@ const AdCanvas = () => {
                         {selectedId && (
                             <Transformer
                                 ref={trRef}
+                                keepRatio={true}
+                                enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']}
                                 boundBoxFunc={(oldBox, newBox) => {
                                     if (newBox.width < 5 || newBox.height < 5) {
                                         return oldBox;

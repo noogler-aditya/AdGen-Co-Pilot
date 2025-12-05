@@ -80,7 +80,26 @@ const useAdStore = create((set) => ({
                 newY = (newHeight / 2) + distFromCenter;
             }
 
-            return { ...el, x: newX, y: newY };
+            // Auto-Scaling Logic (Preserve Layout)
+            // Calculate how much the canvas shrank/grew
+            const widthRatio = newWidth / oldWidth;
+            const heightRatio = newHeight / oldHeight;
+
+            // Use the smaller ratio to ensure it fits (contain strategy)
+            // But don't scale up too aggressively to avoid pixelation
+            let scaleFactor = Math.min(widthRatio, heightRatio);
+
+            // Clamp scale factor to avoid extreme shrinking/growing
+            // e.g. if switching to a tiny banner, we must shrink.
+            // if switching to a huge billboard, we scale up.
+
+            return {
+                ...el,
+                x: newX,
+                y: newY,
+                scaleX: el.scaleX * scaleFactor,
+                scaleY: el.scaleY * scaleFactor
+            };
         });
 
         return {

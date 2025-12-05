@@ -60,9 +60,14 @@ You must return ONLY a JSON object following this schema:
 const analyzeGuidelines = async (text) => {
   try {
     console.log('Analyzing text of length:', text.length);
+
+    // 1. Pre-process: Filter text if it's too long
+    const processedText = filterRelevantContent(text);
+    console.log('Processed text length:', processedText.length);
+
     const response = await axios.post(OLLAMA_URL, {
       model: MODEL_NAME,
-      prompt: `${SYSTEM_PROMPT}\n\n### INPUT TEXT:\n${text}`,
+      prompt: `${SYSTEM_PROMPT}\n\n### INPUT TEXT:\n${processedText}`,
       stream: false,
       format: 'json'
     });
@@ -81,6 +86,92 @@ const analyzeGuidelines = async (text) => {
     }
     throw new Error('Failed to analyze guidelines with AI');
   }
+};
+
+/**
+ * Smart Content Filtering
+ * Splits large text into chunks and retains only those with high relevance to technical specs.
+ */
+const filterRelevantContent = (text) => {
+  const MAX_CONTEXT_LENGTH = 15000; // Safe limit for LLM context
+  if (text.length <= MAX_CONTEXT_LENGTH) return text;
+
+  console.log('Text too large, applying smart filtering...');
+
+  // Expanded Keywords for Retail/Tesco contexts
+  const KEYWORDS = [
+    // Dimensions & Layout
+    'px', 'pixels', 'dimension', 'width', 'height', 'aspect ratio', '1:1', '9:16', '16:9',
+    'margin', 'padding', 'safe zone', 'clear space', 'gutter', 'bleed', 'border',
+    // File Specs
+    'file size', 'kb', 'mb', 'max size', 'weight', 'resolution', 'dpi', 'ppi',
+    'format', 'jpeg', 'png', 'jpg', 'gif', 'html5', 'static', 'animated',
+    // Branding
+    'color', 'hex', 'rgb', 'cmyk', 'contrast', 'background', 'logo', 'typography', 'font',
+    // Sections
+    'technical spec', 'requirements', 'guidelines', 'supply', 'deliverables'
+  ];
+
+  // Regex patterns for high-value technical data (Bonus Points)
+  const PATTERNS = [
+    /\d{2,4}\s?[xX]\s?\d{2,4}/, // Dimensions like 300x250 or 300 x 250
+    /\d+\s?(kb|mb|KB|MB)/,       // File sizes like 150KB
+    /#[0-9a-fA-F]{6}/            // Hex codes
+  ];
+
+  // Split into larger chunks to preserve table rows/context
+  const CHUNK_SIZE = 1500;
+  const OVERLAP = 300;
+  const chunks = [];
+
+  for (let i = 0; i < text.length; i += (CHUNK_SIZE - OVERLAP)) {
+    chunks.push(text.slice(i, i + CHUNK_SIZE));
+  }
+
+  // Score chunks
+  const scoredChunks = chunks.map(chunk => {
+    const lowerChunk = chunk.toLowerCase();
+    let score = 0;
+
+    // 1. Keyword Matches
+    KEYWORDS.forEach(kw => {
+      if (lowerChunk.includes(kw)) score += 1;
+    });
+
+    // 2. Pattern Matches (High Value)
+    PATTERNS.forEach(regex => {
+      const matches = chunk.match(new RegExp(regex, 'g'));
+      if (matches) {
+        score += (matches.length * 3); // 3x points for actual data points
+      }
+    });
+
+    return { chunk, score };
+  });
+
+  // Sort by score (descending)
+  scoredChunks.sort((a, b) => b.score - a.score);
+
+  // Select top chunks until we hit the limit
+  let finalContent = '';
+  let currentLength = 0;
+
+  // Always include the first chunk (often contains Title/Context) if it has any score
+  if (scoredChunks.length > 0 && chunks[0]) {
+    finalContent += chunks[0] + '\n\n... [INTRO END] ...\n\n';
+    currentLength += chunks[0].length;
+  }
+
+  for (const item of scoredChunks) {
+    if (item.chunk === chunks[0]) continue; // Already added
+    if (currentLength + item.chunk.length > MAX_CONTEXT_LENGTH) break;
+    if (item.score < 2) continue; // Skip low-relevance chunks
+
+    finalContent += item.chunk + '\n\n... [SECTION BREAK] ...\n\n';
+    currentLength += item.chunk.length;
+  }
+
+  return finalContent || text.slice(0, MAX_CONTEXT_LENGTH);
 };
 
 module.exports = {

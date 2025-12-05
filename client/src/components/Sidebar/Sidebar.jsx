@@ -10,6 +10,36 @@ const Sidebar = () => {
     const [isUploading, setIsUploading] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
+    const [baseColor, setBaseColor] = useState('#ffffff');
+
+    const adjustBrightness = (hex, percent) => {
+        // strip the leading # if it's there
+        hex = hex.replace(/^\s*#|\s*$/g, '');
+
+        // convert 3 char codes --> 6, e.g. `E0F` --> `EE00FF`
+        if (hex.length === 3) {
+            hex = hex.replace(/(.)/g, '$1$1');
+        }
+
+        var r = parseInt(hex.substr(0, 2), 16),
+            g = parseInt(hex.substr(2, 2), 16),
+            b = parseInt(hex.substr(4, 2), 16);
+
+        return '#' +
+            ((0 | (1 << 8) + r + (256 - r) * percent / 100).toString(16)).substr(1) +
+            ((0 | (1 << 8) + g + (256 - g) * percent / 100).toString(16)).substr(1) +
+            ((0 | (1 << 8) + b + (256 - b) * percent / 100).toString(16)).substr(1);
+    }
+
+    const handleBrightnessChange = (val) => {
+        if (!baseColor) return;
+        try {
+            const newColor = adjustBrightness(baseColor, parseInt(val));
+            setBackground(newColor);
+        } catch (e) {
+            console.error('Color adjustment failed', e);
+        }
+    };
 
     const selectedElement = elements.find(el => el.id === selectedId);
 
@@ -303,12 +333,16 @@ const Sidebar = () => {
                     {guidelines.constraints?.recommended_colors?.length > 0 && (
                         <div style={{ marginBottom: 15 }}>
                             <p style={{ fontSize: '0.8rem', marginBottom: 8, color: 'var(--text-muted)' }}>Brand Colors:</p>
-                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
                                 {guidelines.constraints.recommended_colors.map((color, i) => (
                                     <div
                                         key={i}
                                         onClick={() => {
                                             setBackground(color);
+                                            setBaseColor(color);
+                                            // Reset brightness slider when picking a new color
+                                            const slider = document.getElementById('brightness-slider');
+                                            if (slider) slider.value = 0;
                                             toast.success(`Background set to ${color}`);
                                         }}
                                         title={color}
@@ -325,6 +359,88 @@ const Sidebar = () => {
                                         onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
                                     />
                                 ))}
+                            </div>
+
+                            {/* Contrast/Brightness Slider */}
+                            <div className="input-group">
+                                <label style={{ fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between' }}>
+                                    <span>Adjust Contrast / Brightness</span>
+                                    <span style={{ opacity: 0.5 }}>+/-</span>
+                                </label>
+                                <input
+                                    id="brightness-slider"
+                                    type="range"
+                                    min="-50"
+                                    max="50"
+                                    defaultValue="0"
+                                    onInput={(e) => {
+                                        // Helper to adjust brightness of a hex color
+                                        const adjustBrightness = (hex, percent) => {
+                                            // Convert hex to RGB
+                                            let r = parseInt(hex.slice(1, 3), 16);
+                                            let g = parseInt(hex.slice(3, 5), 16);
+                                            let b = parseInt(hex.slice(5, 7), 16);
+
+                                            // Convert RGB to HSL
+                                            r /= 255;
+                                            g /= 255;
+                                            b /= 255;
+                                            const max = Math.max(r, g, b);
+                                            const min = Math.min(r, g, b);
+                                            let h, s, l = (max + min) / 2;
+
+                                            if (max === min) {
+                                                h = s = 0; // achromatic
+                                            } else {
+                                                const d = max - min;
+                                                s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+                                                switch (max) {
+                                                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                                                    case g: h = (b - r) / d + 2; break;
+                                                    case b: h = (r - g) / d + 4; break;
+                                                }
+                                                h /= 6;
+                                            }
+
+                                            // Adjust lightness
+                                            l = Math.max(0, Math.min(1, l + percent / 100)); // Ensure lightness stays between 0 and 1
+
+                                            // Convert HSL back to RGB
+                                            const hue2rgb = (p, q, t) => {
+                                                if (t < 0) t += 1;
+                                                if (t > 1) t -= 1;
+                                                if (t < 1 / 6) return p + (q - p) * 6 * t;
+                                                if (t < 1 / 2) return q;
+                                                if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+                                                return p;
+                                            };
+
+                                            const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                                            const p = 2 * l - q;
+                                            r = hue2rgb(p, q, h + 1 / 3);
+                                            g = hue2rgb(p, q, h);
+                                            b = hue2rgb(p, q, h - 1 / 3);
+
+                                            // Convert RGB to hex
+                                            const toHex = (c) => {
+                                                const hex = Math.round(c * 255).toString(16);
+                                                return hex.length === 1 ? '0' + hex : hex;
+                                            };
+
+                                            return '#' + toHex(r) + toHex(g) + toHex(b);
+                                        };
+
+                                        const handleBrightnessChange = (value) => {
+                                            const percent = parseInt(value);
+                                            if (baseColor) {
+                                                const newColor = adjustBrightness(baseColor, percent);
+                                                setBackground(newColor);
+                                            }
+                                        };
+                                        handleBrightnessChange(e.target.value);
+                                    }}
+                                    style={{ width: '100%', cursor: 'pointer' }}
+                                />
                             </div>
                         </div>
                     )}
