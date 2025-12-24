@@ -1,18 +1,55 @@
-import React, { useRef, useEffect } from 'react';
-import { Stage, Layer, Transformer, Text, Rect } from 'react-konva';
+import React, { useRef, useEffect, useState } from 'react';
+import { Stage, Layer, Transformer, Text, Rect, Circle } from 'react-konva';
 import useAdStore from '../../store/useAdStore';
 import URLImage from './URLImage';
-import { isInsideSafeZone } from '../../utils/complianceChecker';
 import toast from 'react-hot-toast';
+import ContextMenu from '../ContextMenu/ContextMenu';
 
 const AdCanvas = () => {
     const stageRef = useRef(null);
-    const { elements, selectedId, selectElement, updateElement, addElement, background, guidelines, showSafeZone, currentFormat } = useAdStore();
     const trRef = useRef(null);
+
+    const {
+        elements, selectedIds, selectElement, updateElement, addElement,
+        background, guidelines, showSafeZone, currentFormat, heatmapVisible
+    } = useAdStore();
+
+    // Context menu state
+    const [contextMenu, setContextMenu] = useState(null);
+
+    // Backward compatibility for selectedId
+    const selectedId = selectedIds && selectedIds.length > 0 ? selectedIds[0] : null;
 
     // Use dimensions from store
     const width = currentFormat.width;
     const height = currentFormat.height;
+
+    // Container ref for calculating scale
+    const containerRef = useRef(null);
+    const [scale, setScale] = useState(1);
+
+    // Calculate scale to fit canvas in container
+    useEffect(() => {
+        const updateScale = () => {
+            if (containerRef.current) {
+                const containerWidth = containerRef.current.clientWidth - 60; // padding
+                const containerHeight = containerRef.current.clientHeight - 60;
+
+                const scaleX = containerWidth / width;
+                const scaleY = containerHeight / height;
+                const newScale = Math.min(scaleX, scaleY, 1); // Don't scale up beyond 100%
+
+                setScale(Math.max(newScale, 0.1)); // Minimum 10% scale
+            }
+        };
+
+        updateScale();
+        window.addEventListener('resize', updateScale);
+        return () => window.removeEventListener('resize', updateScale);
+    }, [width, height]);
+
+    // Sort elements by zIndex for proper rendering order
+    const sortedElements = [...elements].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
 
     // Safe Zone Calculation
     let safeZoneMargin = 0;
@@ -176,6 +213,7 @@ const AdCanvas = () => {
     return (
         <div
             className="canvas-wrapper"
+            ref={containerRef}
             onDrop={handleDrop}
             onDragOver={handleDragOver}
             style={{
@@ -184,10 +222,16 @@ const AdCanvas = () => {
                 height: '100%',
                 display: 'flex',
                 justifyContent: 'center',
-                alignItems: 'center'
+                alignItems: 'center',
+                overflow: 'hidden'
             }}
         >
-            <div style={{ backgroundColor: background, boxShadow: '0 0 20px rgba(0,0,0,0.5)' }}>
+            <div style={{
+                backgroundColor: background,
+                boxShadow: '0 0 20px rgba(0,0,0,0.5)',
+                transform: `scale(${scale})`,
+                transformOrigin: 'center center'
+            }}>
                 <Stage
                     width={width}
                     height={height}
@@ -234,7 +278,7 @@ const AdCanvas = () => {
                             </React.Fragment>
                         )}
 
-                        {elements.map((el, i) => {
+                        {sortedElements.map((el) => {
                             if (el.type === 'image') {
                                 return (
                                     <URLImage
@@ -242,8 +286,16 @@ const AdCanvas = () => {
                                         image={el}
                                         name={el.id}
                                         draggable
-                                        onClick={() => selectElement(el.id)}
+                                        onClick={(e) => selectElement(el.id, e.evt.shiftKey)}
                                         onTap={() => selectElement(el.id)}
+                                        onContextMenu={(e) => {
+                                            e.evt.preventDefault();
+                                            setContextMenu({
+                                                x: e.evt.clientX,
+                                                y: e.evt.clientY,
+                                                elementId: el.id
+                                            });
+                                        }}
                                         scaleX={el.scaleX}
                                         scaleY={el.scaleY}
                                         rotation={el.rotation}
@@ -269,11 +321,20 @@ const AdCanvas = () => {
                                         x={el.x}
                                         y={el.y}
                                         fontSize={el.fontSize}
+                                        fontFamily={el.fontFamily || 'Inter'}
                                         fill={el.fill}
                                         name={el.id}
                                         draggable
-                                        onClick={() => selectElement(el.id)}
+                                        onClick={(e) => selectElement(el.id, e.evt.shiftKey)}
                                         onTap={() => selectElement(el.id)}
+                                        onContextMenu={(e) => {
+                                            e.evt.preventDefault();
+                                            setContextMenu({
+                                                x: e.evt.clientX,
+                                                y: e.evt.clientY,
+                                                elementId: el.id
+                                            });
+                                        }}
                                         scaleX={el.scaleX}
                                         scaleY={el.scaleY}
                                         rotation={el.rotation}
@@ -308,8 +369,55 @@ const AdCanvas = () => {
                             />
                         )}
                     </Layer>
+
+                    {/* Attention Heatmap Overlay Layer */}
+                    {heatmapVisible && (
+                        <Layer listening={false} opacity={0.6}>
+                            {elements.map((el) => {
+                                // Calculate visual weight based on element properties
+                                let radius = 100;
+                                let colorStart = 'rgba(255, 0, 0, 0.8)'; // Red for high attention
+                                let colorEnd = 'rgba(255, 0, 0, 0)';
+
+                                if (el.type === 'image') {
+                                    // Images get larger heatspots based on scale
+                                    const avgScale = (Math.abs(el.scaleX || 1) + Math.abs(el.scaleY || 1)) / 2;
+                                    radius = 150 * avgScale;
+                                } else if (el.type === 'text') {
+                                    // Text saliency depends on font size
+                                    radius = (el.fontSize || 20) * 2.5;
+                                    colorStart = 'rgba(255, 140, 0, 0.9)'; // Orange for text
+                                    colorEnd = 'rgba(255, 140, 0, 0)';
+                                }
+
+                                return (
+                                    <Circle
+                                        key={`heat-${el.id}`}
+                                        x={el.x + radius / 3}
+                                        y={el.y + radius / 3}
+                                        radius={radius}
+                                        fillRadialGradientStartPoint={{ x: 0, y: 0 }}
+                                        fillRadialGradientStartRadius={0}
+                                        fillRadialGradientEndPoint={{ x: 0, y: 0 }}
+                                        fillRadialGradientEndRadius={radius}
+                                        fillRadialGradientColorStops={[0, colorStart, 1, colorEnd]}
+                                    />
+                                );
+                            })}
+                        </Layer>
+                    )}
                 </Stage>
             </div>
+
+            {/* Context Menu */}
+            {contextMenu && (
+                <ContextMenu
+                    x={contextMenu.x}
+                    y={contextMenu.y}
+                    elementId={contextMenu.elementId}
+                    onClose={() => setContextMenu(null)}
+                />
+            )}
         </div>
     );
 };

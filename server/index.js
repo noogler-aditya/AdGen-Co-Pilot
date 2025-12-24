@@ -1,68 +1,212 @@
+/**
+ * AdGen Co-Pilot API Server
+ * Handles image uploads, PDF guideline analysis, and export optimization.
+ */
+
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const cloudinary = require('cloudinary').v2;
 const multer = require('multer');
+const rateLimit = require('express-rate-limit');
 
+// Load environment variables
 dotenv.config();
 
+// Initialize Express
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Cloudinary Config
+// ============================================
+// RATE LIMITING CONFIGURATION
+// ============================================
+
+/**
+ * Global Rate Limiter
+ * Applies to all routes - prevents general abuse
+ * Limit: 100 requests per 15 minutes per IP
+ */
+const globalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // 100 requests per window
+    message: {
+        error: 'Too many requests',
+        message: 'You have exceeded the rate limit. Please try again in 15 minutes.',
+        retryAfter: '15 minutes'
+    },
+    standardHeaders: true, // Return rate limit info in headers
+    legacyHeaders: false, // Disable X-RateLimit headers
+    handler: (req, res) => {
+        res.status(429).json({
+            error: 'Too many requests',
+            message: 'You have exceeded the rate limit. Please try again later.',
+            retryAfter: Math.ceil(req.rateLimit.resetTime / 1000)
+        });
+    }
+});
+
+/**
+ * API Rate Limiter
+ * For general API endpoints - moderate limit
+ * Limit: 50 requests per 15 minutes per IP
+ */
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 50, // 50 requests per window
+    message: {
+        error: 'API rate limit exceeded',
+        message: 'Too many API requests. Please slow down.',
+        retryAfter: '15 minutes'
+    },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+/**
+ * Upload Rate Limiter
+ * For file upload endpoints - stricter limit to prevent abuse
+ * Limit: 20 uploads per 15 minutes per IP
+ */
+const uploadLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 20, // 20 uploads per window
+    message: {
+        error: 'Upload limit exceeded',
+        message: 'Too many file uploads. Please wait before uploading more files.',
+        retryAfter: '15 minutes'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipFailedRequests: true // Don't count failed uploads
+});
+
+/**
+ * AI Analysis Rate Limiter
+ * For PDF analysis endpoint - very strict due to computational cost
+ * Limit: 10 requests per 15 minutes per IP
+ */
+const aiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10, // 10 analysis requests per window
+    message: {
+        error: 'AI analysis limit exceeded',
+        message: 'Too many PDF analysis requests. This is a computationally intensive operation.',
+        retryAfter: '15 minutes'
+    },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+/**
+ * Export Rate Limiter
+ * For image export endpoint - moderate limit
+ * Limit: 30 exports per 15 minutes per IP
+ */
+const exportLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 30, // 30 exports per window
+    message: {
+        error: 'Export limit exceeded',
+        message: 'Too many export requests. Please wait before exporting more images.',
+        retryAfter: '15 minutes'
+    },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+// Apply global rate limiter to all routes
+app.use(globalLimiter);
+
+// Services
+const { extractTextFromBuffer } = require('./services/pdfService');
+const { analyzeGuidelines } = require('./services/ollamaService');
+const { optimizeImage } = require('./services/exportService');
+
+// Cloudinary Configuration
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// Multer config for memory storage (we upload directly to Cloudinary)
-const storage = multer.memoryStorage();
-const upload = multer({
-    storage,
-    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+// Multer: Image Upload Configuration
+const imageUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 50 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
         if (file.mimetype.startsWith('image/')) {
             cb(null, true);
         } else {
-            cb(new Error('Not an image! Please upload an image.'), false);
+            cb(new Error('Invalid file type. Please upload an image.'), false);
         }
     }
 });
 
-// Services
-const { extractTextFromBuffer } = require('./services/pdfService');
-const { analyzeGuidelines } = require('./services/ollamaService');
-
-// Multer config for PDF
+// Multer: PDF Upload Configuration
 const pdfUpload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+    limits: { fileSize: 50 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
         if (file.mimetype === 'application/pdf') {
             cb(null, true);
         } else {
-            cb(new Error('Not a PDF! Please upload a PDF file.'), false);
+            cb(new Error('Invalid file type. Please upload a PDF.'), false);
         }
     }
 });
+// ============================================
+// API ENDPOINTS
+// ============================================
 
+/**
+ * GET /
+ * Health Check - returns server status
+ */
 app.get('/', (req, res) => {
-    res.send('AdGen Server Running');
+    res.json({
+        status: 'ok',
+        message: 'AdGen Co-Pilot API is running',
+        version: '1.0.0'
+    });
 });
 
-// Real Upload Endpoint (Images)
-app.post('/api/upload', upload.single('image'), async (req, res) => {
+/**
+ * GET /api/health
+ * Extended health check with rate limit info
+ */
+app.get('/api/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        version: '1.0.0',
+        rateLimits: {
+            global: { requests: 100, window: '15 minutes' },
+            upload: { requests: 20, window: '15 minutes' },
+            aiAnalysis: { requests: 10, window: '15 minutes' },
+            export: { requests: 30, window: '15 minutes' }
+        },
+        endpoints: [
+            'POST /api/upload - Upload images',
+            'POST /api/analyze-guideline - Analyze PDF guidelines',
+            'POST /api/export - Export optimized images'
+        ]
+    });
+});
+
+/**
+ * POST /api/upload
+ * Upload image to Cloudinary
+ */
+app.post('/api/upload', uploadLimiter, imageUpload.single('image'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No file uploaded' });
         }
 
-        // Upload to Cloudinary using stream
         const b64 = Buffer.from(req.file.buffer).toString('base64');
-        let dataURI = "data:" + req.file.mimetype + ";base64," + b64;
+        const dataURI = `data:${req.file.mimetype};base64,${b64}`;
 
         const result = await cloudinary.uploader.upload(dataURI, {
             folder: 'adgen_uploads',
@@ -75,74 +219,58 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
             width: result.width,
             height: result.height
         });
-
     } catch (error) {
-        console.error('Upload Error:', error);
         res.status(500).json({ error: 'Image upload failed', details: error.message });
     }
 });
 
-// PDF Analysis Endpoint
-app.post('/api/analyze-guideline', pdfUpload.single('pdf'), async (req, res) => {
+/**
+ * POST /api/analyze-guideline
+ * Extract and analyze PDF guideline to structured rules
+ */
+app.post('/api/analyze-guideline', aiLimiter, pdfUpload.single('pdf'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No PDF uploaded' });
         }
 
-        console.log('Processing PDF:', {
-            originalname: req.file.originalname,
-            mimetype: req.file.mimetype,
-            size: req.file.size
-        });
-
-        // 1. Extract Text
+        // Extract text from PDF
         const text = await extractTextFromBuffer(req.file.buffer);
-        console.log('Text extracted, length:', text.length);
 
         if (!text || text.trim().length < 50) {
             return res.status(400).json({
                 error: 'Insufficient text found in PDF',
-                details: 'The uploaded PDF appears to be an image or scanned document. Please upload a text-based PDF guideline.'
+                details: 'The PDF appears to be scanned or image-based. Please upload a text-based PDF.'
             });
         }
 
-        // 2. Analyze with AI
+        // Analyze with AI
         const rules = await analyzeGuidelines(text);
-        console.log('AI Analysis complete');
 
         res.json({ success: true, rules });
-
     } catch (error) {
-        console.error('Analysis Error:', error);
         res.status(500).json({ error: 'Guideline analysis failed', details: error.message });
     }
 });
 
-const { optimizeImage } = require('./services/exportService');
-
-// ... (existing code)
-
-// Export Optimization Endpoint
-app.post('/api/export', upload.single('image'), async (req, res) => {
+/**
+ * POST /api/export
+ * Optimize and compress image for retail media export
+ */
+app.post('/api/export', exportLimiter, imageUpload.single('image'), async (req, res) => {
     try {
         let imageBuffer;
 
-        // Handle File Upload (Multipart)
         if (req.file) {
             imageBuffer = req.file.buffer;
-        }
-        // Handle Base64 String (JSON body)
-        else if (req.body.image) {
-            const base64Data = req.body.image.replace(/^data:image\/\w+;base64,/, "");
+        } else if (req.body.image) {
+            const base64Data = req.body.image.replace(/^data:image\/\w+;base64,/, '');
             imageBuffer = Buffer.from(base64Data, 'base64');
         } else {
             return res.status(400).json({ error: 'No image provided' });
         }
 
-        console.log('Optimizing export image...');
-        const optimizedBuffer = await optimizeImage(imageBuffer, 500); // 500KB limit
-
-        // Convert back to base64 for response
+        const optimizedBuffer = await optimizeImage(imageBuffer, 500);
         const optimizedBase64 = `data:image/jpeg;base64,${optimizedBuffer.toString('base64')}`;
 
         res.json({
@@ -150,14 +278,13 @@ app.post('/api/export', upload.single('image'), async (req, res) => {
             image: optimizedBase64,
             size_kb: (optimizedBuffer.length / 1024).toFixed(2)
         });
-
     } catch (error) {
-        console.error('Export Error:', error);
         res.status(500).json({ error: 'Export optimization failed', details: error.message });
     }
 });
 
+// Start Server
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`AdGen Co-Pilot API running on port ${PORT}`);
 });
