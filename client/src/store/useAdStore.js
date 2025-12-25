@@ -22,6 +22,13 @@ const useAdStore = create(
                 { width: 1080, height: 1920, label: 'Story (1080x1920)' }
             ],
 
+            // Compliance State
+            complianceViolations: [],
+            showCompliancePanel: true,
+
+            // Theme
+            theme: 'dark', // 'dark' or 'light'
+
             // History for Undo/Redo
             history: [],
             historyIndex: -1,
@@ -334,6 +341,154 @@ const useAdStore = create(
             toggleSafeZone: () => set((state) => ({ showSafeZone: !state.showSafeZone })),
             toggleHeatmap: () => set((state) => ({ heatmapVisible: !state.heatmapVisible })),
             setBackground: (color) => set({ background: color }),
+
+            // ==================== THEME ====================
+            toggleTheme: () => set((state) => ({
+                theme: state.theme === 'dark' ? 'light' : 'dark'
+            })),
+            setTheme: (theme) => set({ theme }),
+
+            // ==================== COMPLIANCE PANEL ====================
+            toggleCompliancePanel: () => set((state) => ({
+                showCompliancePanel: !state.showCompliancePanel
+            })),
+
+            // ==================== COMPLIANCE CHECKING ====================
+            checkCompliance: () => {
+                const state = get();
+                const { elements, guidelines, currentFormat } = state;
+                const violations = [];
+
+                if (!guidelines) {
+                    set({ complianceViolations: [] });
+                    return [];
+                }
+
+                const safeZone = guidelines.safe_zone || { top: 10, bottom: 10, left: 10, right: 10 };
+                const safeZonePixels = {
+                    top: (safeZone.top / 100) * currentFormat.height,
+                    bottom: currentFormat.height - ((safeZone.bottom / 100) * currentFormat.height),
+                    left: (safeZone.left / 100) * currentFormat.width,
+                    right: currentFormat.width - ((safeZone.right / 100) * currentFormat.width)
+                };
+
+                elements.forEach(el => {
+                    const elWidth = (el.width || 100) * (el.scaleX || 1);
+                    const elHeight = (el.height || 100) * (el.scaleY || 1);
+                    const elRight = el.x + elWidth;
+                    const elBottom = el.y + elHeight;
+
+                    // Safe Zone Violation Check
+                    if (el.x < safeZonePixels.left) {
+                        violations.push({
+                            elementId: el.id,
+                            type: 'safe_zone',
+                            severity: 'error',
+                            message: `Element "${el.type === 'text' ? el.text?.substring(0, 20) : 'Image'}" extends into left safe zone`,
+                            rule: `Keep elements at least ${safeZone.left}% from left edge`
+                        });
+                    }
+
+                    if (elRight > safeZonePixels.right) {
+                        violations.push({
+                            elementId: el.id,
+                            type: 'safe_zone',
+                            severity: 'error',
+                            message: `Element "${el.type === 'text' ? el.text?.substring(0, 20) : 'Image'}" extends into right safe zone`,
+                            rule: `Keep elements at least ${safeZone.right}% from right edge`
+                        });
+                    }
+
+                    if (el.y < safeZonePixels.top) {
+                        violations.push({
+                            elementId: el.id,
+                            type: 'safe_zone',
+                            severity: 'error',
+                            message: `Element "${el.type === 'text' ? el.text?.substring(0, 20) : 'Image'}" extends into top safe zone`,
+                            rule: `Keep elements at least ${safeZone.top}% from top edge`
+                        });
+                    }
+
+                    if (elBottom > safeZonePixels.bottom) {
+                        violations.push({
+                            elementId: el.id,
+                            type: 'safe_zone',
+                            severity: 'error',
+                            message: `Element "${el.type === 'text' ? el.text?.substring(0, 20) : 'Image'}" extends into bottom safe zone`,
+                            rule: `Keep elements at least ${safeZone.bottom}% from bottom edge`
+                        });
+                    }
+
+                    // Text-specific checks
+                    if (el.type === 'text' && guidelines.text_requirements) {
+                        const textReqs = guidelines.text_requirements;
+
+                        // Font size check
+                        if (textReqs.min_font_size && el.fontSize < textReqs.min_font_size) {
+                            violations.push({
+                                elementId: el.id,
+                                type: 'text',
+                                severity: 'warning',
+                                message: `Text "${el.text?.substring(0, 20)}..." font size (${el.fontSize}px) is below minimum`,
+                                rule: `Minimum font size: ${textReqs.min_font_size}px`
+                            });
+                        }
+
+                        // Max text length check
+                        if (textReqs.max_characters && el.text && el.text.length > textReqs.max_characters) {
+                            violations.push({
+                                elementId: el.id,
+                                type: 'text',
+                                severity: 'warning',
+                                message: `Text exceeds maximum character limit (${el.text.length}/${textReqs.max_characters})`,
+                                rule: `Maximum ${textReqs.max_characters} characters allowed`
+                            });
+                        }
+                    }
+
+                    // Image-specific checks
+                    if (el.type === 'image' && guidelines.image_requirements) {
+                        const imgReqs = guidelines.image_requirements;
+
+                        // Minimum size check
+                        if (imgReqs.min_width && elWidth < imgReqs.min_width) {
+                            violations.push({
+                                elementId: el.id,
+                                type: 'image',
+                                severity: 'warning',
+                                message: `Image width (${Math.round(elWidth)}px) is below minimum`,
+                                rule: `Minimum image width: ${imgReqs.min_width}px`
+                            });
+                        }
+                    }
+                });
+
+                // File size warning (based on guidelines)
+                if (guidelines.file_size_max_kb) {
+                    const imageCount = elements.filter(el => el.type === 'image').length;
+                    if (imageCount > 3) {
+                        violations.push({
+                            elementId: null,
+                            type: 'file_size',
+                            severity: 'warning',
+                            message: `${imageCount} images may exceed ${guidelines.file_size_max_kb}KB limit`,
+                            rule: `Consider reducing image count or using compression`
+                        });
+                    }
+                }
+
+                set({ complianceViolations: violations });
+                return violations;
+            },
+
+            getViolationsForElement: (elementId) => {
+                return get().complianceViolations.filter(v => v.elementId === elementId);
+            },
+
+            hasViolations: () => get().complianceViolations.length > 0,
+
+            getErrorCount: () => get().complianceViolations.filter(v => v.severity === 'error').length,
+            getWarningCount: () => get().complianceViolations.filter(v => v.severity === 'warning').length,
         }),
         {
             name: 'adgen-store',
@@ -341,7 +496,8 @@ const useAdStore = create(
                 elements: state.elements,
                 background: state.background,
                 currentFormat: state.currentFormat,
-                projectName: state.projectName
+                projectName: state.projectName,
+                theme: state.theme
             })
         }
     )

@@ -225,6 +225,97 @@ app.post('/api/upload', uploadLimiter, imageUpload.single('image'), async (req, 
 });
 
 /**
+ * POST /api/remove-background
+ * Remove background from image using remove.bg API
+ */
+app.post('/api/remove-background', uploadLimiter, imageUpload.single('image'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No image provided' });
+        }
+
+        const apiKey = process.env.REMOVE_BG_API_KEY;
+
+        if (!apiKey) {
+            // Fallback: Use Cloudinary's background removal if available
+            try {
+                const b64 = Buffer.from(req.file.buffer).toString('base64');
+                const dataURI = `data:${req.file.mimetype};base64,${b64}`;
+
+                const result = await cloudinary.uploader.upload(dataURI, {
+                    folder: 'adgen_uploads',
+                    resource_type: 'auto',
+                    background_removal: 'cloudinary_ai'
+                });
+
+                return res.json({
+                    success: true,
+                    url: result.secure_url,
+                    method: 'cloudinary_ai'
+                });
+            } catch {
+                return res.status(400).json({
+                    error: 'Background removal unavailable',
+                    message: 'Set REMOVE_BG_API_KEY in environment variables or enable Cloudinary AI'
+                });
+            }
+        }
+
+        // Use remove.bg API
+        const FormData = require('form-data');
+        const axios = require('axios');
+
+        const formData = new FormData();
+        formData.append('image_file', req.file.buffer, {
+            filename: req.file.originalname,
+            contentType: req.file.mimetype
+        });
+        formData.append('size', 'auto');
+
+        const response = await axios({
+            method: 'post',
+            url: 'https://api.remove.bg/v1.0/removebg',
+            data: formData,
+            headers: {
+                ...formData.getHeaders(),
+                'X-Api-Key': apiKey
+            },
+            responseType: 'arraybuffer'
+        });
+
+        // Upload result to Cloudinary
+        const resultB64 = Buffer.from(response.data).toString('base64');
+        const resultDataURI = `data:image/png;base64,${resultB64}`;
+
+        const cloudResult = await cloudinary.uploader.upload(resultDataURI, {
+            folder: 'adgen_uploads',
+            resource_type: 'auto'
+        });
+
+        res.json({
+            success: true,
+            url: cloudResult.secure_url,
+            public_id: cloudResult.public_id,
+            width: cloudResult.width,
+            height: cloudResult.height,
+            method: 'remove_bg'
+        });
+
+    } catch (error) {
+        if (error.response?.status === 402) {
+            return res.status(402).json({
+                error: 'API credits exhausted',
+                message: 'Remove.bg API credits have been used up. Please add more credits.'
+            });
+        }
+        res.status(500).json({
+            error: 'Background removal failed',
+            details: error.message
+        });
+    }
+});
+
+/**
  * POST /api/analyze-guideline
  * Extract and analyze PDF guideline to structured rules
  */

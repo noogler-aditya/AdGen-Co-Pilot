@@ -1,32 +1,32 @@
-export const removeBackground = async (imageFile) => {
-    const apiKey = import.meta.env.VITE_REMOVE_BG_API_KEY;
+/**
+ * Image Processing Service
+ * 
+ * Background removal is handled server-side for security.
+ */
 
-    if (!apiKey) {
-        console.warn('Remove.bg API key not found. Returning original image.');
-        return URL.createObjectURL(imageFile);
-    }
+import { removeBackground as serverRemoveBackground } from './api';
 
-    const formData = new FormData();
-    formData.append('image_file', imageFile);
-    formData.append('size', 'auto');
-
+/**
+ * Remove background from an image file
+ * @param {File} file - Image file to process
+ * @returns {Promise<string>} - URL of the processed image (blob URL or Cloudinary URL)
+ */
+export const removeBackground = async (file) => {
     try {
-        const response = await fetch('https://api.remove.bg/v1.0/removebg', {
-            method: 'POST',
-            headers: {
-                'X-Api-Key': apiKey,
-            },
-            body: formData,
-        });
+        // Call the server-side background removal
+        const result = await serverRemoveBackground(file);
 
-        if (!response.ok) {
-            throw new Error(`Remove.bg API Error: ${response.statusText}`);
+        if (result && result.success && result.url) {
+            // Return the Cloudinary URL of the processed image
+            return result.url;
+        } else {
+            // If server fails, return original as blob URL
+            console.warn('Background removal failed, returning original');
+            return URL.createObjectURL(file);
         }
-
-        const blob = await response.blob();
-        return URL.createObjectURL(blob);
     } catch (error) {
-        console.error('Background removal failed:', error);
-        return URL.createObjectURL(imageFile);
+        console.error('Background removal error:', error);
+        // Fallback: return original image as blob URL
+        return URL.createObjectURL(file);
     }
 };

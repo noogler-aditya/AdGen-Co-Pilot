@@ -1,15 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { uploadImage, analyzeGuideline, optimizeAndDownload } from '../../services/api';
+import React, { useState, useEffect } from 'react';
+import { uploadImage, analyzeGuideline, optimizeAndDownload, removeBackground } from '../../services/api';
 import useAdStore from '../../store/useAdStore';
 import {
     FiType, FiDownload, FiFileText, FiUpload, FiImage, FiLoader,
-    FiEye, FiEyeOff, FiAlertCircle, FiTrash2, FiMove,
-    FiMenu, FiX, FiGrid, FiRotateCcw, FiRotateCw, FiSave, FiFolder
+    FiEye, FiEyeOff, FiAlertCircle, FiTrash2, FiMove, FiEdit3,
+    FiMenu, FiX, FiRotateCcw, FiRotateCw,
+    FiSun, FiMoon, FiScissors, FiLayers
 } from 'react-icons/fi';
 import toast, { Toaster } from 'react-hot-toast';
 import CustomDropdown from '../CustomDropdown/CustomDropdown';
-import TemplateGallery from '../TemplateGallery/TemplateGallery';
+
 import LayerPanel from '../LayerPanel/LayerPanel';
+import CompliancePanel from '../CompliancePanel/CompliancePanel';
 
 const Sidebar = () => {
     const {
@@ -17,7 +19,7 @@ const Sidebar = () => {
         setBackground, availableFormats, currentFormat, setFormat,
         elements, updateElement, removeElement, toggleHeatmap, heatmapVisible,
         selectedIds, undo, redo, canUndo, canRedo,
-        saveProject, loadProject, getSavedProjects, newProject
+        theme, toggleTheme, checkCompliance
     } = useAdStore();
 
     // Get selectedId from selectedIds for backward compatibility
@@ -27,20 +29,10 @@ const Sidebar = () => {
     const [isUploading, setIsUploading] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
+    const [isRemovingBg, setIsRemovingBg] = useState(false);
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-    const [showTemplates, setShowTemplates] = useState(false);
-    const [showProjectMenu, setShowProjectMenu] = useState(false);
-    const [baseColor, setBaseColor] = useState('#ffffff');
 
-    // Project save handler
-    const handleSaveProject = useCallback(() => {
-        try {
-            saveProject();
-            toast.success('Project saved!');
-        } catch {
-            toast.error('Failed to save project');
-        }
-    }, [saveProject]);
+    const [baseColor, setBaseColor] = useState('#ffffff');
 
     // Keyboard shortcuts
     useEffect(() => {
@@ -57,11 +49,6 @@ const Sidebar = () => {
                 e.preventDefault();
                 redo();
             }
-            // Save: Ctrl/Cmd + S
-            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-                e.preventDefault();
-                handleSaveProject();
-            }
             // Delete/Backspace
             if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
                 removeElement(selectedId);
@@ -69,13 +56,7 @@ const Sidebar = () => {
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [undo, redo, selectedId, removeElement, handleSaveProject]);
-
-    const handleLoadProject = (project) => {
-        loadProject(project);
-        setShowProjectMenu(false);
-        toast.success(`Loaded: ${project.name}`);
-    };
+    }, [undo, redo, selectedId, removeElement]);
 
     const selectedElement = elements.find(el => selectedIds.includes(el.id));
 
@@ -95,6 +76,8 @@ const Sidebar = () => {
             if (data.success && data.rules) {
                 setGuidelines(data.rules);
                 toast.success(`Guidelines Applied: ${data.rules.retailer_name || 'Custom'}`, { id: loadingToast });
+                // Trigger compliance check after guidelines are set
+                setTimeout(() => checkCompliance(), 100);
             } else {
                 throw new Error('Invalid response');
             }
@@ -103,6 +86,43 @@ const Sidebar = () => {
             toast.error('Failed to analyze PDF', { id: loadingToast });
         } finally {
             setIsAnalyzing(false);
+        }
+    };
+
+    const handleRemoveBackground = async (imageUrl) => {
+        setIsRemovingBg(true);
+        const loadingToast = toast.loading('Removing background...');
+
+        try {
+            // Fetch the image and convert to file
+            const response = await fetch(imageUrl);
+            const blob = await response.blob();
+            const file = new File([blob], 'image.png', { type: blob.type });
+
+            const result = await removeBackground(file);
+
+            if (result.success) {
+                // Replace the image URL in uploaded images
+                setUploadedImages(prev =>
+                    prev.map(img => img === imageUrl ? result.url : img)
+                );
+
+                // Also update any elements using this image
+                elements.forEach(el => {
+                    if (el.type === 'image' && el.src === imageUrl) {
+                        updateElement(el.id, { src: result.url });
+                    }
+                });
+
+                toast.success('Background removed!', { id: loadingToast });
+            } else {
+                throw new Error('Background removal failed');
+            }
+        } catch (error) {
+            console.error('Background removal failed:', error);
+            toast.error(error.response?.data?.message || 'Failed to remove background', { id: loadingToast });
+        } finally {
+            setIsRemovingBg(false);
         }
     };
 
@@ -196,27 +216,198 @@ const Sidebar = () => {
 
     return (
         <>
-            {/* Full-Screen Loading Overlay for PDF Analysis */}
+            {/* Enhanced AI Analysis Loading Popup */}
             {isAnalyzing && (
-                <div className="loading-overlay">
-                    <div className="loading-spinner" />
-                    <div className="loading-content">
-                        <h2>Analyzing Guidelines</h2>
-                        <p>AI is extracting compliance rules from your PDF...</p>
-                    </div>
-                    <div className="loading-steps">
-                        <div className="loading-step done">
-                            <div className="loading-step-icon">📄</div>
-                            <span className="loading-step-label">Upload</span>
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 10000,
+                    background: 'rgba(0, 0, 0, 0.5)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)'
+                }}>
+                    <div style={{
+                        background: 'linear-gradient(145deg, rgba(25, 28, 40, 0.95) 0%, rgba(15, 17, 25, 0.98) 100%)',
+                        backdropFilter: 'blur(20px)',
+                        WebkitBackdropFilter: 'blur(20px)',
+                        border: '1px solid rgba(99, 102, 241, 0.15)',
+                        borderRadius: 24,
+                        padding: '40px 48px',
+                        textAlign: 'center',
+                        boxShadow: '0 32px 64px rgba(0, 0, 0, 0.6), 0 0 120px rgba(99, 102, 241, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+                        maxWidth: 380,
+                        width: '90%',
+                        animation: 'popupFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
+                    }}>
+                        {/* Icon Container with Glow */}
+                        <div style={{
+                            width: 80,
+                            height: 80,
+                            margin: '0 auto 24px',
+                            borderRadius: 20,
+                            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%)',
+                            border: '1px solid rgba(99, 102, 241, 0.2)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            position: 'relative',
+                            boxShadow: '0 0 40px rgba(99, 102, 241, 0.2)'
+                        }}>
+                            {/* Document Icon SVG */}
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="url(#iconGradient)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                <defs>
+                                    <linearGradient id="iconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" stopColor="#6366f1" />
+                                        <stop offset="100%" stopColor="#a855f7" />
+                                    </linearGradient>
+                                </defs>
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                                <line x1="16" y1="13" x2="8" y2="13" />
+                                <line x1="16" y1="17" x2="8" y2="17" />
+                                <polyline points="10 9 9 9 8 9" />
+                            </svg>
+                            {/* Spinning Ring */}
+                            <div style={{
+                                position: 'absolute',
+                                width: '100%',
+                                height: '100%',
+                                borderRadius: 20,
+                                border: '2px solid transparent',
+                                borderTopColor: '#6366f1',
+                                animation: 'spin 2s linear infinite'
+                            }} />
                         </div>
-                        <div className="loading-step active">
-                            <div className="loading-step-icon">🤖</div>
-                            <span className="loading-step-label">AI Analysis</span>
+
+                        {/* Title */}
+                        <h3 style={{
+                            margin: '0 0 8px 0',
+                            fontSize: '1.25rem',
+                            fontWeight: 700,
+                            color: '#fff',
+                            letterSpacing: '-0.02em'
+                        }}>
+                            Analyzing Guidelines
+                        </h3>
+
+                        {/* Subtitle */}
+                        <p style={{
+                            margin: '0 0 28px 0',
+                            fontSize: '0.9rem',
+                            color: '#64748b',
+                            lineHeight: 1.5
+                        }}>
+                            AI is extracting compliance rules from your PDF
+                        </p>
+
+                        {/* Progress Bar Container */}
+                        <div style={{
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            borderRadius: 12,
+                            padding: 16,
+                            marginBottom: 20
+                        }}>
+                            {/* Progress Track */}
+                            <div style={{
+                                height: 6,
+                                background: 'rgba(99, 102, 241, 0.15)',
+                                borderRadius: 3,
+                                overflow: 'hidden',
+                                marginBottom: 12
+                            }}>
+                                {/* Animated Progress Fill */}
+                                <div style={{
+                                    height: '100%',
+                                    width: '60%',
+                                    background: 'linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #6366f1 100%)',
+                                    backgroundSize: '200% 100%',
+                                    borderRadius: 3,
+                                    animation: 'progressShimmer 1.5s ease-in-out infinite, progressGrow 3s ease-out forwards'
+                                }} />
+                            </div>
+
+                            {/* Status Steps */}
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                            }}>
+                                {/* Step 1: Upload - Complete */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <div style={{
+                                        width: 20,
+                                        height: 20,
+                                        borderRadius: '50%',
+                                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
+                                            <polyline points="20 6 9 17 4 12" />
+                                        </svg>
+                                    </div>
+                                    <span style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 500 }}>Uploaded</span>
+                                </div>
+
+                                {/* Step 2: Analyzing - Active */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <div style={{
+                                        width: 20,
+                                        height: 20,
+                                        borderRadius: '50%',
+                                        background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        animation: 'pulse 1.5s ease-in-out infinite'
+                                    }}>
+                                        <div style={{
+                                            width: 8,
+                                            height: 8,
+                                            borderRadius: '50%',
+                                            background: 'white'
+                                        }} />
+                                    </div>
+                                    <span style={{ fontSize: '0.75rem', color: '#a5b4fc', fontWeight: 500 }}>Analyzing</span>
+                                </div>
+
+                                {/* Step 3: Apply - Pending */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: 0.4 }}>
+                                    <div style={{
+                                        width: 20,
+                                        height: 20,
+                                        borderRadius: '50%',
+                                        background: 'rgba(255, 255, 255, 0.1)',
+                                        border: '1px solid rgba(255, 255, 255, 0.2)'
+                                    }} />
+                                    <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>Apply</span>
+                                </div>
+                            </div>
                         </div>
-                        <div className="loading-step">
-                            <div className="loading-step-icon">✓</div>
-                            <span className="loading-step-label">Apply Rules</span>
-                        </div>
+
+                        {/* Processing Hint */}
+                        <p style={{
+                            margin: 0,
+                            fontSize: '0.75rem',
+                            color: '#475569',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 6
+                        }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2">
+                                <circle cx="12" cy="12" r="10" />
+                                <polyline points="12 6 12 12 16 14" />
+                            </svg>
+                            This may take a few moments...
+                        </p>
                     </div>
                 </div>
             )}
@@ -276,7 +467,16 @@ const Sidebar = () => {
                     <div>
                         <h2>AdGen Co-Pilot</h2>
                     </div>
-                    <span>AI</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <button
+                            className="theme-toggle"
+                            onClick={(e) => { e.stopPropagation(); toggleTheme(); }}
+                            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                        >
+                            {theme === 'dark' ? <FiSun size={16} /> : <FiMoon size={16} />}
+                        </button>
+                        <span>AI</span>
+                    </div>
                 </div>
 
                 <div className="sidebar-content">
@@ -408,82 +608,10 @@ const Sidebar = () => {
                                         <FiRotateCw size={14} />
                                         <span>Redo</span>
                                     </button>
-                                    <button
-                                        className="compact-btn"
-                                        onClick={handleSaveProject}
-                                        title="Save (Ctrl+S)"
-                                    >
-                                        <FiSave size={14} />
-                                        <span>Save</span>
-                                    </button>
-                                    <button
-                                        className="compact-btn"
-                                        onClick={() => setShowProjectMenu(!showProjectMenu)}
-                                        title="Load Project"
-                                    >
-                                        <FiFolder size={14} />
-                                        <span>Load</span>
-                                    </button>
                                 </div>
-                                {showProjectMenu && (
-                                    <div style={{ marginTop: 10, padding: 10, background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 8px 0' }}>Saved Projects:</p>
-                                        {getSavedProjects().length === 0 ? (
-                                            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center' }}>No saved projects</p>
-                                        ) : (
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                                {getSavedProjects().map((p, i) => (
-                                                    <button
-                                                        key={i}
-                                                        onClick={() => handleLoadProject(p)}
-                                                        style={{
-                                                            padding: '8px 10px',
-                                                            background: 'var(--bg-dark)',
-                                                            border: '1px solid var(--border)',
-                                                            borderRadius: 6,
-                                                            color: 'var(--text-main)',
-                                                            fontSize: '0.8rem',
-                                                            cursor: 'pointer',
-                                                            textAlign: 'left'
-                                                        }}
-                                                    >
-                                                        {p.name}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-                                        <button
-                                            onClick={() => { newProject(); setShowProjectMenu(false); toast.success('New project created'); }}
-                                            style={{
-                                                marginTop: 8,
-                                                width: '100%',
-                                                padding: '8px 10px',
-                                                background: 'var(--primary)',
-                                                border: 'none',
-                                                borderRadius: 6,
-                                                color: 'white',
-                                                fontSize: '0.8rem',
-                                                cursor: 'pointer'
-                                            }}
-                                        >
-                                            + New Project
-                                        </button>
-                                    </div>
-                                )}
                             </div>
 
-                            {/* Templates */}
-                            <div className="sidebar-section">
-                                <h3>Start</h3>
-                                <button
-                                    className="tool-btn"
-                                    onClick={() => setShowTemplates(true)}
-                                    style={{ width: '100%', justifyContent: 'center' }}
-                                >
-                                    <FiGrid />
-                                    <span>Browse Templates</span>
-                                </button>
-                            </div>
+
 
                             <div className="sidebar-section">
                                 <h3>Canvas Format</h3>
@@ -503,6 +631,12 @@ const Sidebar = () => {
                             <div className="sidebar-section">
                                 <h3>Layers</h3>
                                 <LayerPanel />
+                            </div>
+
+                            {/* Compliance Check */}
+                            <div className="sidebar-section">
+                                <h3>Compliance</h3>
+                                <CompliancePanel />
                             </div>
 
                             <div className="sidebar-section">
@@ -761,6 +895,14 @@ const Sidebar = () => {
                                             className="asset-thumb"
                                             crossOrigin="anonymous"
                                         />
+                                        <button
+                                            className="remove-bg-overlay-btn"
+                                            onClick={() => handleRemoveBackground(src)}
+                                            disabled={isRemovingBg}
+                                            title="Remove Background"
+                                        >
+                                            {isRemovingBg ? <FiLoader className="spinner" size={12} /> : <FiScissors size={12} />}
+                                        </button>
                                     </div>
                                 ))}
                             </div>
@@ -778,11 +920,7 @@ const Sidebar = () => {
                 {isMobileSidebarOpen ? <FiX size={24} /> : <FiMenu size={24} />}
             </button>
 
-            {/* Template Gallery Modal */}
-            <TemplateGallery
-                isOpen={showTemplates}
-                onClose={() => setShowTemplates(false)}
-            />
+
         </>
     );
 };

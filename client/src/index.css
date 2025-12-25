@@ -3,7 +3,7 @@
    ======================================== */
 
 :root {
-  /* Core Colors */
+  /* Core Colors - Dark Theme (default) */
   --bg-dark: #0a0b0d;
   --bg-panel: rgba(20, 22, 28, 0.95);
   --bg-panel-solid: #14161c;
@@ -18,6 +18,8 @@
   --accent-cyan: #22d3ee;
   --accent-purple: #a855f7;
   --accent-emerald: #10b981;
+  --accent-red: #ef4444;
+  --accent-orange: #f59e0b;
 
   /* Text Colors */
   --text-main: #f8fafc;
@@ -40,6 +42,25 @@
   --transition-fast: 0.15s ease;
   --transition-normal: 0.25s ease;
   --transition-slow: 0.4s ease;
+}
+
+/* Light Theme */
+[data-theme="light"] {
+  --bg-dark: #f1f5f9;
+  --bg-panel: rgba(255, 255, 255, 0.98);
+  --bg-panel-solid: #ffffff;
+  --bg-card: rgba(241, 245, 249, 0.9);
+  --bg-card-hover: rgba(226, 232, 240, 0.95);
+
+  --text-main: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+
+  --border: rgba(0, 0, 0, 0.08);
+  --border-hover: rgba(99, 102, 241, 0.5);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.16);
 }
 
 /* ========================================
@@ -1199,6 +1220,42 @@ div[style*="position: fixed"][style*="z-index: 9999"]>div {
   }
 }
 
+@keyframes popupFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes progressShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes progressGrow {
+  0% {
+    width: 20%;
+  }
+
+  50% {
+    width: 60%;
+  }
+
+  100% {
+    width: 85%;
+  }
+}
+
 /* ========================================
    Status Badge
    ======================================== */
@@ -2019,4 +2076,402 @@ div[style*="position: fixed"][style*="z-index: 9999"]>div {
   .main-content {
     width: 100%;
   }
+}
+
+/* ========================================
+   Compliance Panel
+   ======================================== */
+
+.compliance-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-top: 1rem;
+  overflow: hidden;
+}
+
+.compliance-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: rgba(99, 102, 241, 0.1);
+  border-bottom: 1px solid var(--border);
+}
+
+.compliance-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--primary);
+  margin: 0;
+}
+
+.compliance-header .close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all var(--transition-fast);
+}
+
+.compliance-header .close-btn:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-main);
+}
+
+.compliance-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.compliance-empty svg {
+  margin-bottom: 0.75rem;
+  opacity: 0.5;
+}
+
+.compliance-empty p {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.compliance-empty .hint {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+.compliance-success {
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+.compliance-success .success-icon {
+  color: var(--accent-emerald);
+  margin-bottom: 0.75rem;
+}
+
+.compliance-success h4 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: var(--accent-emerald);
+}
+
+.compliance-success p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.compliance-summary {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.summary-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  background: var(--bg-card);
+  border-radius: 20px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.summary-badge.errors {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--accent-red);
+}
+
+.summary-badge.warnings {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--accent-orange);
+}
+
+.violations-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.violation-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.violation-item:hover {
+  background: var(--bg-card-hover);
+}
+
+.violation-item:last-child {
+  border-bottom: none;
+}
+
+.violation-item.error .violation-icon {
+  color: var(--accent-red);
+}
+
+.violation-item.warning .violation-icon {
+  color: var(--accent-orange);
+}
+
+.violation-icon {
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.violation-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.violation-message {
+  margin: 0 0 0.25rem;
+  font-size: 0.813rem;
+  color: var(--text-main);
+  line-height: 1.4;
+}
+
+.violation-rule {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.violation-action {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+  transition: all var(--transition-fast);
+}
+
+.violation-action:hover {
+  background: var(--primary);
+  color: white;
+}
+
+.compliance-footer {
+  padding: 0.5rem 1rem;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.compliance-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-main);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  margin-top: 1rem;
+}
+
+.compliance-toggle-btn:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-hover);
+}
+
+.compliance-toggle-btn .text-green {
+  color: var(--accent-emerald);
+}
+
+.compliance-toggle-btn .text-orange {
+  color: var(--accent-orange);
+}
+
+/* Theme Toggle Button */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.theme-toggle:hover {
+  background: var(--bg-card-hover);
+  color: var(--primary);
+  border-color: var(--border-hover);
+}
+
+/* Layer Panel Enhancement */
+.layer-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-top: 1rem;
+}
+
+.layer-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.layer-panel-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.layer-panel-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+.layer-panel-empty p {
+  margin: 0 0 0.25rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.layer-panel-empty span {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Background Removal Button */
+.remove-bg-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.625rem 1rem;
+  background: linear-gradient(135deg, var(--accent-purple), var(--primary));
+  border: none;
+  border-radius: var(--radius);
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.remove-bg-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.4);
+}
+
+.remove-bg-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.remove-bg-btn .spinner {
+  animation: spin 1s linear infinite;
+}
+
+/* Violation Indicator on Canvas Elements */
+.element-violation-indicator {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 20px;
+  height: 20px;
+  background: var(--accent-red);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 12px;
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.5);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+}
+
+/* Background Removal Overlay Button */
+.asset-wrapper {
+  position: relative;
+}
+
+.remove-bg-overlay-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: rgba(168, 85, 247, 0.9);
+  border: none;
+  border-radius: 50%;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all var(--transition-fast);
+}
+
+.asset-wrapper:hover .remove-bg-overlay-btn {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.remove-bg-overlay-btn:hover {
+  background: var(--accent-purple);
+  transform: scale(1.1);
+}
+
+.remove-bg-overlay-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.remove-bg-overlay-btn .spinner {
+  animation: spin 1s linear infinite;
 }

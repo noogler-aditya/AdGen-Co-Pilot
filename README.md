@@ -13,12 +13,19 @@ AdGen Co-Pilot is an intelligent design tool that helps marketers create retail 
 - **Llama 3.2** locally extracts technical constraints
 - Auto-applies safe zones, dimensions, and compliance rules
 
+### ✅ **Real-Time Compliance Enforcement**
+- **Live violation detection** against extracted rules
+- **Safe zone checking** - elements flagged when entering restricted areas
+- **Text & image validation** - font size, character limits, minimum dimensions
+- **Compliance panel** with actionable error/warning lists
+
 ### 🎨 **Professional Design Tools**
 - **Drag & Drop Canvas** with live preview
 - **Auto Background Removal** (remove.bg API integration)
 - **Google Fonts** integration (7 premium fonts)
 - **Attention Heatmap** - AI predicts visual focus areas
 - **Multi-select & Layer Control** with z-index management
+- **Light/Dark Theme** toggle for user preference
 
 ### ⚡ **Smart Export**
 - **Auto-compression** to meet retailer file size limits (e.g., 500KB)
@@ -83,7 +90,6 @@ npm install
 **Client** (`client/.env`):
 ```env
 VITE_API_URL=http://localhost:5001
-VITE_REMOVE_BG_API_KEY=your_remove_bg_api_key
 ```
 
 **Server** (`server/.env`):
@@ -94,6 +100,9 @@ OLLAMA_MODEL=llama3.2
 CLOUDINARY_CLOUD_NAME=your_cloud_name
 CLOUDINARY_API_KEY=your_api_key
 CLOUDINARY_API_SECRET=your_api_secret
+
+# Optional: For background removal (get free API key at remove.bg)
+REMOVE_BG_API_KEY=your_remove_bg_api_key
 ```
 
 ### 4. Start Ollama (Required for PDF Analysis)
