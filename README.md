@@ -5,7 +5,7 @@
   <img src="https://img.shields.io/badge/Vite-7.2-646CFF?style=for-the-badge&logo=vite&logoColor=white" alt="Vite" />
 </p>
 
-<h1 align="center">🚀 AdGen Co-Pilot</h1>
+<h1 align="center">AdGen Co-Pilot</h1>
 
 <p align="center">
   <strong>AI-Powered Retail Media Ad Designer with Automated Compliance Enforcement</strong>
@@ -59,7 +59,7 @@ Retail media advertising requires strict adherence to platform-specific guidelin
 | **Drag & Drop Canvas** | Intuitive Konva.js-powered editor |
 | **Background Removal** | One-click via remove.bg API |
 | **7 Premium Fonts** | Google Fonts integration |
-| **Attention Heatmap** | AI predicts where viewers look |
+| **Attention Heatmap** | Simulated visual focus prediction - shows where viewers look |
 | **Layer Management** | Full z-index control |
 
 ### ⚡ Smart Export
@@ -247,11 +247,14 @@ AdGen/
 
 ## 📈 Future Roadmap
 
-- [ ] Multi-language PDF support
-- [ ] Template marketplace
+- [ ] Direct integration with retail media platforms
+- [ ] Shared retailer guideline library
 - [ ] Team collaboration
-- [ ] Figma plugin integration
+- [ ] Auto A/B creative variants
 - [ ] Batch export for campaigns
+- [ ] Model fine-tuning using anonymized guidelines
+
+
 
 ---
 
