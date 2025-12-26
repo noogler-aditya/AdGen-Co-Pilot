@@ -366,6 +366,15 @@ const AdCanvas = () => {
                                     }
                                     return newBox;
                                 }}
+                                // Pro Styling
+                                anchorSize={10}
+                                anchorCornerRadius={5}
+                                anchorStroke="#6366f1"
+                                anchorStrokeWidth={1}
+                                anchorFill="#ffffff"
+                                borderStroke="#6366f1"
+                                borderStrokeWidth={2}
+                                padding={2}
                             />
                         )}
                     </Layer>

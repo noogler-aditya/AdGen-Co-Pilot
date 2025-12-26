@@ -12,6 +12,7 @@ import CustomDropdown from '../CustomDropdown/CustomDropdown';
 
 import LayerPanel from '../LayerPanel/LayerPanel';
 import CompliancePanel from '../CompliancePanel/CompliancePanel';
+import AnalyzingOverlay from '../AnalyzingOverlay/AnalyzingOverlay';
 
 const Sidebar = () => {
     const {
@@ -216,201 +217,8 @@ const Sidebar = () => {
 
     return (
         <>
-            {/* Enhanced AI Analysis Loading Popup */}
-            {isAnalyzing && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 10000,
-                    background: 'rgba(0, 0, 0, 0.5)',
-                    backdropFilter: 'blur(12px)',
-                    WebkitBackdropFilter: 'blur(12px)'
-                }}>
-                    <div style={{
-                        background: 'linear-gradient(145deg, rgba(25, 28, 40, 0.95) 0%, rgba(15, 17, 25, 0.98) 100%)',
-                        backdropFilter: 'blur(20px)',
-                        WebkitBackdropFilter: 'blur(20px)',
-                        border: '1px solid rgba(99, 102, 241, 0.15)',
-                        borderRadius: 24,
-                        padding: '40px 48px',
-                        textAlign: 'center',
-                        boxShadow: '0 32px 64px rgba(0, 0, 0, 0.6), 0 0 120px rgba(99, 102, 241, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
-                        maxWidth: 380,
-                        width: '90%',
-                        animation: 'popupFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
-                    }}>
-                        {/* Icon Container with Glow */}
-                        <div style={{
-                            width: 80,
-                            height: 80,
-                            margin: '0 auto 24px',
-                            borderRadius: 20,
-                            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%)',
-                            border: '1px solid rgba(99, 102, 241, 0.2)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            position: 'relative',
-                            boxShadow: '0 0 40px rgba(99, 102, 241, 0.2)'
-                        }}>
-                            {/* Document Icon SVG */}
-                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="url(#iconGradient)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                <defs>
-                                    <linearGradient id="iconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                                        <stop offset="0%" stopColor="#6366f1" />
-                                        <stop offset="100%" stopColor="#a855f7" />
-                                    </linearGradient>
-                                </defs>
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                <polyline points="14 2 14 8 20 8" />
-                                <line x1="16" y1="13" x2="8" y2="13" />
-                                <line x1="16" y1="17" x2="8" y2="17" />
-                                <polyline points="10 9 9 9 8 9" />
-                            </svg>
-                            {/* Spinning Ring */}
-                            <div style={{
-                                position: 'absolute',
-                                width: '100%',
-                                height: '100%',
-                                borderRadius: 20,
-                                border: '2px solid transparent',
-                                borderTopColor: '#6366f1',
-                                animation: 'spin 2s linear infinite'
-                            }} />
-                        </div>
-
-                        {/* Title */}
-                        <h3 style={{
-                            margin: '0 0 8px 0',
-                            fontSize: '1.25rem',
-                            fontWeight: 700,
-                            color: '#fff',
-                            letterSpacing: '-0.02em'
-                        }}>
-                            Analyzing Guidelines
-                        </h3>
-
-                        {/* Subtitle */}
-                        <p style={{
-                            margin: '0 0 28px 0',
-                            fontSize: '0.9rem',
-                            color: '#64748b',
-                            lineHeight: 1.5
-                        }}>
-                            AI is extracting compliance rules from your PDF
-                        </p>
-
-                        {/* Progress Bar Container */}
-                        <div style={{
-                            background: 'rgba(255, 255, 255, 0.05)',
-                            borderRadius: 12,
-                            padding: 16,
-                            marginBottom: 20
-                        }}>
-                            {/* Progress Track */}
-                            <div style={{
-                                height: 6,
-                                background: 'rgba(99, 102, 241, 0.15)',
-                                borderRadius: 3,
-                                overflow: 'hidden',
-                                marginBottom: 12
-                            }}>
-                                {/* Animated Progress Fill */}
-                                <div style={{
-                                    height: '100%',
-                                    width: '60%',
-                                    background: 'linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #6366f1 100%)',
-                                    backgroundSize: '200% 100%',
-                                    borderRadius: 3,
-                                    animation: 'progressShimmer 1.5s ease-in-out infinite, progressGrow 3s ease-out forwards'
-                                }} />
-                            </div>
-
-                            {/* Status Steps */}
-                            <div style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center'
-                            }}>
-                                {/* Step 1: Upload - Complete */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <div style={{
-                                        width: 20,
-                                        height: 20,
-                                        borderRadius: '50%',
-                                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center'
-                                    }}>
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
-                                            <polyline points="20 6 9 17 4 12" />
-                                        </svg>
-                                    </div>
-                                    <span style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 500 }}>Uploaded</span>
-                                </div>
-
-                                {/* Step 2: Analyzing - Active */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <div style={{
-                                        width: 20,
-                                        height: 20,
-                                        borderRadius: '50%',
-                                        background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        animation: 'pulse 1.5s ease-in-out infinite'
-                                    }}>
-                                        <div style={{
-                                            width: 8,
-                                            height: 8,
-                                            borderRadius: '50%',
-                                            background: 'white'
-                                        }} />
-                                    </div>
-                                    <span style={{ fontSize: '0.75rem', color: '#a5b4fc', fontWeight: 500 }}>Analyzing</span>
-                                </div>
-
-                                {/* Step 3: Apply - Pending */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: 0.4 }}>
-                                    <div style={{
-                                        width: 20,
-                                        height: 20,
-                                        borderRadius: '50%',
-                                        background: 'rgba(255, 255, 255, 0.1)',
-                                        border: '1px solid rgba(255, 255, 255, 0.2)'
-                                    }} />
-                                    <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>Apply</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Processing Hint */}
-                        <p style={{
-                            margin: 0,
-                            fontSize: '0.75rem',
-                            color: '#475569',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 6
-                        }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2">
-                                <circle cx="12" cy="12" r="10" />
-                                <polyline points="12 6 12 12 16 14" />
-                            </svg>
-                            This may take a few moments...
-                        </p>
-                    </div>
-                </div>
-            )}
+            {/* Professional AI Analysis Loading Overlay */}
+            <AnalyzingOverlay isVisible={isAnalyzing} />
 
             <div className={`sidebar ${isMobileSidebarOpen ? 'open' : ''}`}>
                 <Toaster
@@ -467,7 +275,7 @@ const Sidebar = () => {
                     <div>
                         <h2>AdGen Co-Pilot</h2>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto' }}>
                         <button
                             className="theme-toggle"
                             onClick={(e) => { e.stopPropagation(); toggleTheme(); }}
@@ -475,7 +283,6 @@ const Sidebar = () => {
                         >
                             {theme === 'dark' ? <FiSun size={16} /> : <FiMoon size={16} />}
                         </button>
-                        <span>AI</span>
                     </div>
                 </div>
 
