@@ -1,3 +1,16 @@
+/**
+ * AdGen Co-Pilot - Main Application Component
+ * 
+ * Root component handling:
+ * - Route management (Landing Page, Editor)
+ * - Theme application via data-theme attribute
+ * - Professional entrance animations
+ * - Welcome overlay sequence
+ * 
+ * @component
+ * @module App
+ */
+
 import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion'; // eslint-disable-line no-unused-vars

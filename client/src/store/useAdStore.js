@@ -1,7 +1,25 @@
+/**
+ * AdGen Co-Pilot - Global State Management
+ * 
+ * Zustand store with persistence middleware for managing:
+ * - Canvas elements (text, images, shapes)
+ * - Compliance guidelines from AI analysis
+ * - Undo/redo history (50 states)
+ * - Theme preferences
+ * - Project metadata
+ * 
+ * @module store/useAdStore
+ * @see https://github.com/pmndrs/zustand
+ */
+
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-// History management for undo/redo
+// ============================================
+// CONSTANTS
+// ============================================
+
+/** Maximum number of undo/redo states to maintain */
 const MAX_HISTORY = 50;
 
 const useAdStore = create(

@@ -198,6 +198,17 @@ All API calls go through `services/api.js`:
 - Keyboard shortcut integration
 ```
 
+### 4. Attention Heatmap (Simulated)
+```javascript
+// Location: AdCanvas.jsx → Heatmap overlay
+// Visual focus prediction simulation:
+- Gradient overlay on canvas (warm colors = high attention)
+- Toggle on/off via sidebar button
+- Helps designers optimize visual hierarchy
+- Simulates where viewer's eyes naturally focus
+- Based on center-weighted attention model
+```
+
 ---
 
 ## 📱 Responsive Design
