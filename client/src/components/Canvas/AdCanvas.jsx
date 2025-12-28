@@ -75,12 +75,25 @@ const AdCanvas = () => {
                     // Hide Safe Zone for capture
                     const safeZoneNodes = stageRef.current.find('.safe-zone-indicator');
                     safeZoneNodes.forEach(node => node.hide());
+
+                    // Hide Heatmap Layer for capture (it's a visualization, not part of the design)
+                    const heatmapNodes = stageRef.current.find('Circle');
+                    const visibleHeatmapNodes = [];
+                    heatmapNodes.forEach(node => {
+                        if (node.isVisible()) {
+                            visibleHeatmapNodes.push(node);
+                            node.hide();
+                        }
+                    });
+
                     stageRef.current.batchDraw();
 
                     const uri = stageRef.current.toDataURL({ pixelRatio: 2 });
 
                     // Restore Safe Zone
                     safeZoneNodes.forEach(node => node.show());
+                    // Restore Heatmap nodes that were visible
+                    visibleHeatmapNodes.forEach(node => node.show());
                     stageRef.current.batchDraw();
 
                     const link = document.createElement('a');
@@ -100,6 +113,18 @@ const AdCanvas = () => {
                     // Hide Safe Zone for capture
                     const safeZoneNodes = stageRef.current.find('.safe-zone-indicator');
                     safeZoneNodes.forEach(node => node.hide());
+
+                    // Hide Heatmap Layer for capture (it's a visualization, not part of the design)
+                    const heatmapNodes = stageRef.current.find('Circle');
+                    const visibleHeatmapNodes = [];
+                    heatmapNodes.forEach(node => {
+                        // Only hide nodes that are part of the heatmap (have heat- prefix in key)
+                        if (node.isVisible()) {
+                            visibleHeatmapNodes.push(node);
+                            node.hide();
+                        }
+                    });
+
                     stageRef.current.batchDraw();
 
                     stageRef.current.toBlob({
@@ -107,6 +132,8 @@ const AdCanvas = () => {
                         callback: (blob) => {
                             // Restore Safe Zone
                             safeZoneNodes.forEach(node => node.show());
+                            // Restore Heatmap nodes that were visible
+                            visibleHeatmapNodes.forEach(node => node.show());
                             stageRef.current.batchDraw();
 
                             window.dispatchEvent(new CustomEvent('export-data-ready', { detail: blob }));
