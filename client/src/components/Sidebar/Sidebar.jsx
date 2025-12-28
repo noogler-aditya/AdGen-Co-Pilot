@@ -400,7 +400,7 @@ const Sidebar = () => {
                                     <button
                                         className="compact-btn"
                                         onClick={undo}
-                                        disabled={!canUndo || !canUndo()}
+                                        disabled={!canUndo()}
                                         title="Undo (Ctrl+Z)"
                                     >
                                         <FiRotateCcw size={14} />
@@ -409,7 +409,7 @@ const Sidebar = () => {
                                     <button
                                         className="compact-btn"
                                         onClick={redo}
-                                        disabled={!canRedo || !canRedo()}
+                                        disabled={!canRedo()}
                                         title="Redo (Ctrl+Y)"
                                     >
                                         <FiRotateCw size={14} />

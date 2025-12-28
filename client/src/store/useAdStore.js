@@ -62,55 +62,147 @@ const useAdStore = create(
             },
 
             // ==================== UNDO/REDO ====================
-            pushHistory: () => set((state) => {
+            /**
+             * Simple undo/redo pattern:
+             * - history[] stores snapshots of canvas states
+             * - historyIndex points to the CURRENT displayed state in history
+             * - After each action: push new state, update index to point to it
+             * - Undo: decrement index, restore that state
+             * - Redo: increment index, restore that state
+             */
+
+            /**
+             * Save current state to history before making changes.
+             * This captures the "before" state so we can undo to it.
+             */
+            saveStateForUndo: () => {
+                const state = get();
                 const snapshot = {
                     elements: JSON.parse(JSON.stringify(state.elements)),
                     background: state.background
                 };
-                const newHistory = state.history.slice(0, state.historyIndex + 1);
+
+                // If we're not at the end of history, truncate the redo stack
+                let newHistory = state.history.slice(0, state.historyIndex + 1);
                 newHistory.push(snapshot);
-                if (newHistory.length > MAX_HISTORY) newHistory.shift();
-                return {
+
+                // Keep history within limits
+                if (newHistory.length > MAX_HISTORY) {
+                    newHistory.shift();
+                }
+
+                set({
                     history: newHistory,
                     historyIndex: newHistory.length - 1
-                };
-            }),
+                });
+            },
 
-            undo: () => set((state) => {
-                if (state.historyIndex <= 0) return state;
-                const prevIndex = state.historyIndex - 1;
-                const snapshot = state.history[prevIndex];
-                return {
-                    elements: JSON.parse(JSON.stringify(snapshot.elements)),
-                    background: snapshot.background,
-                    historyIndex: prevIndex,
-                    selectedIds: []
-                };
-            }),
+            undo: () => {
+                const state = get();
 
-            redo: () => set((state) => {
-                if (state.historyIndex >= state.history.length - 1) return state;
+                // We need to first save current state (if not already saved) so we can redo
+                // Then restore the previous state from history
+
+                if (state.history.length === 0) {
+                    return; // Nothing to undo
+                }
+
+                // Current state might not be in history if we just did an action
+                // In that case, historyIndex points to the BEFORE state
+                // We need to save the AFTER state for redo, then restore BEFORE
+
+                let newHistory = [...state.history];
+                let newIndex = state.historyIndex;
+
+                // Check if current canvas state differs from the state at historyIndex
+                const currentState = {
+                    elements: JSON.parse(JSON.stringify(state.elements)),
+                    background: state.background
+                };
+
+                const historyState = state.history[state.historyIndex];
+                const statesAreDifferent = !historyState ||
+                    JSON.stringify(currentState.elements) !== JSON.stringify(historyState.elements) ||
+                    currentState.background !== historyState.background;
+
+                if (statesAreDifferent && state.historyIndex === state.history.length - 1) {
+                    // Current state is not saved, add it for redo
+                    newHistory.push(currentState);
+                    // Now restore the state at historyIndex
+                    const snapshotToRestore = state.history[state.historyIndex];
+                    if (!snapshotToRestore) return;
+
+                    set({
+                        elements: JSON.parse(JSON.stringify(snapshotToRestore.elements)),
+                        background: snapshotToRestore.background,
+                        history: newHistory,
+                        historyIndex: state.historyIndex,
+                        selectedIds: []
+                    });
+                } else if (state.historyIndex > 0) {
+                    // Go back one step in history
+                    newIndex = state.historyIndex - 1;
+                    const snapshotToRestore = state.history[newIndex];
+                    if (!snapshotToRestore) return;
+
+                    set({
+                        elements: JSON.parse(JSON.stringify(snapshotToRestore.elements)),
+                        background: snapshotToRestore.background,
+                        historyIndex: newIndex,
+                        selectedIds: []
+                    });
+                }
+            },
+
+            redo: () => {
+                const state = get();
+
+                // Can only redo if there are states after current position
+                if (state.historyIndex >= state.history.length - 1) {
+                    return;
+                }
+
                 const nextIndex = state.historyIndex + 1;
-                const snapshot = state.history[nextIndex];
-                return {
-                    elements: JSON.parse(JSON.stringify(snapshot.elements)),
-                    background: snapshot.background,
+                const snapshotToRestore = state.history[nextIndex];
+                if (!snapshotToRestore) return;
+
+                set({
+                    elements: JSON.parse(JSON.stringify(snapshotToRestore.elements)),
+                    background: snapshotToRestore.background,
                     historyIndex: nextIndex,
                     selectedIds: []
-                };
-            }),
+                });
+            },
 
-            canUndo: () => get().historyIndex > 0,
-            canRedo: () => get().historyIndex < get().history.length - 1,
+            canUndo: () => {
+                const state = get();
+                // Can undo if we have history and either:
+                // 1. Current state differs from saved state (can undo to saved)
+                // 2. historyIndex > 0 (can go back further)
+                if (state.history.length === 0) return false;
+
+                const historyState = state.history[state.historyIndex];
+                if (!historyState) return state.historyIndex > 0;
+
+                const statesAreDifferent =
+                    JSON.stringify(state.elements) !== JSON.stringify(historyState.elements) ||
+                    state.background !== historyState.background;
+
+                return statesAreDifferent || state.historyIndex > 0;
+            },
+            canRedo: () => {
+                const state = get();
+                return state.historyIndex < state.history.length - 1;
+            },
 
             // ==================== ELEMENT ACTIONS ====================
-            addElement: (element) => set((state) => {
-                get().pushHistory();
-                return {
+            addElement: (element) => {
+                get().saveStateForUndo();
+                set((state) => ({
                     elements: [...state.elements, { ...element, zIndex: state.elements.length }],
                     selectedIds: [element.id]
-                };
-            }),
+                }));
+            },
 
             updateElement: (id, newAttrs) => set((state) => ({
                 elements: state.elements.map((el) =>
@@ -118,30 +210,32 @@ const useAdStore = create(
                 )
             })),
 
-            removeElement: (id) => set((state) => {
-                get().pushHistory();
-                return {
+            removeElement: (id) => {
+                get().saveStateForUndo();
+                set((state) => ({
                     elements: state.elements.filter((el) => el.id !== id),
                     selectedIds: state.selectedIds.filter(sid => sid !== id)
-                };
-            }),
+                }));
+            },
 
-            duplicateElement: (id) => set((state) => {
-                get().pushHistory();
-                const element = state.elements.find(el => el.id === id);
-                if (!element) return state;
-                const newElement = {
-                    ...element,
-                    id: `${element.type}-${Date.now()}`,
-                    x: element.x + 20,
-                    y: element.y + 20,
-                    zIndex: state.elements.length
-                };
-                return {
-                    elements: [...state.elements, newElement],
-                    selectedIds: [newElement.id]
-                };
-            }),
+            duplicateElement: (id) => {
+                get().saveStateForUndo();
+                set((state) => {
+                    const element = state.elements.find(el => el.id === id);
+                    if (!element) return state;
+                    const newElement = {
+                        ...element,
+                        id: `${element.type}-${Date.now()}`,
+                        x: element.x + 20,
+                        y: element.y + 20,
+                        zIndex: state.elements.length
+                    };
+                    return {
+                        elements: [...state.elements, newElement],
+                        selectedIds: [newElement.id]
+                    };
+                });
+            },
 
             // ==================== MULTI-SELECT ====================
             selectElement: (id, addToSelection = false) => set((state) => {
@@ -162,67 +256,76 @@ const useAdStore = create(
                 selectedIds: state.elements.map(el => el.id)
             })),
 
-            deleteSelected: () => set((state) => {
-                if (state.selectedIds.length === 0) return state;
-                get().pushHistory();
-                return {
+            deleteSelected: () => {
+                const state = get();
+                if (state.selectedIds.length === 0) return;
+                get().saveStateForUndo();
+                set((state) => ({
                     elements: state.elements.filter(el => !state.selectedIds.includes(el.id)),
                     selectedIds: []
-                };
-            }),
+                }));
+            },
 
             // ==================== LAYER CONTROL ====================
-            bringToFront: (id) => set((state) => {
-                get().pushHistory();
-                const maxZ = Math.max(...state.elements.map(el => el.zIndex || 0));
-                return {
-                    elements: state.elements.map(el =>
-                        el.id === id ? { ...el, zIndex: maxZ + 1 } : el
-                    )
-                };
-            }),
+            bringToFront: (id) => {
+                get().saveStateForUndo();
+                set((state) => {
+                    const maxZ = Math.max(...state.elements.map(el => el.zIndex || 0));
+                    return {
+                        elements: state.elements.map(el =>
+                            el.id === id ? { ...el, zIndex: maxZ + 1 } : el
+                        )
+                    };
+                });
+            },
 
-            sendToBack: (id) => set((state) => {
-                get().pushHistory();
-                const minZ = Math.min(...state.elements.map(el => el.zIndex || 0));
-                return {
-                    elements: state.elements.map(el =>
-                        el.id === id ? { ...el, zIndex: minZ - 1 } : el
-                    )
-                };
-            }),
+            sendToBack: (id) => {
+                get().saveStateForUndo();
+                set((state) => {
+                    const minZ = Math.min(...state.elements.map(el => el.zIndex || 0));
+                    return {
+                        elements: state.elements.map(el =>
+                            el.id === id ? { ...el, zIndex: minZ - 1 } : el
+                        )
+                    };
+                });
+            },
 
-            moveUp: (id) => set((state) => {
-                get().pushHistory();
-                const sorted = [...state.elements].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
-                const idx = sorted.findIndex(el => el.id === id);
-                if (idx === sorted.length - 1) return state;
-                const currentZ = sorted[idx].zIndex || 0;
-                const nextZ = sorted[idx + 1].zIndex || 0;
-                return {
-                    elements: state.elements.map(el => {
-                        if (el.id === id) return { ...el, zIndex: nextZ };
-                        if (el.id === sorted[idx + 1].id) return { ...el, zIndex: currentZ };
-                        return el;
-                    })
-                };
-            }),
+            moveUp: (id) => {
+                get().saveStateForUndo();
+                set((state) => {
+                    const sorted = [...state.elements].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
+                    const idx = sorted.findIndex(el => el.id === id);
+                    if (idx === sorted.length - 1) return state;
+                    const currentZ = sorted[idx].zIndex || 0;
+                    const nextZ = sorted[idx + 1].zIndex || 0;
+                    return {
+                        elements: state.elements.map(el => {
+                            if (el.id === id) return { ...el, zIndex: nextZ };
+                            if (el.id === sorted[idx + 1].id) return { ...el, zIndex: currentZ };
+                            return el;
+                        })
+                    };
+                });
+            },
 
-            moveDown: (id) => set((state) => {
-                get().pushHistory();
-                const sorted = [...state.elements].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
-                const idx = sorted.findIndex(el => el.id === id);
-                if (idx === 0) return state;
-                const currentZ = sorted[idx].zIndex || 0;
-                const prevZ = sorted[idx - 1].zIndex || 0;
-                return {
-                    elements: state.elements.map(el => {
-                        if (el.id === id) return { ...el, zIndex: prevZ };
-                        if (el.id === sorted[idx - 1].id) return { ...el, zIndex: currentZ };
-                        return el;
-                    })
-                };
-            }),
+            moveDown: (id) => {
+                get().saveStateForUndo();
+                set((state) => {
+                    const sorted = [...state.elements].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
+                    const idx = sorted.findIndex(el => el.id === id);
+                    if (idx === 0) return state;
+                    const currentZ = sorted[idx].zIndex || 0;
+                    const prevZ = sorted[idx - 1].zIndex || 0;
+                    return {
+                        elements: state.elements.map(el => {
+                            if (el.id === id) return { ...el, zIndex: prevZ };
+                            if (el.id === sorted[idx - 1].id) return { ...el, zIndex: currentZ };
+                            return el;
+                        })
+                    };
+                });
+            },
 
             // ==================== PROJECT MANAGEMENT ====================
             setProjectName: (name) => set({ projectName: name }),
