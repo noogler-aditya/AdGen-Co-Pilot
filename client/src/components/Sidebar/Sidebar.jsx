@@ -132,32 +132,16 @@ const Sidebar = () => {
         if (!file) return;
 
         setIsUploading(true);
-        const loadingToast = toast.loading('Removing background & Uploading...');
+        const loadingToast = toast.loading('Uploading image...');
 
         try {
-            // 1. Remove Background (Client-side API call)
-            const { removeBackground } = await import('../../services/imageProcessing');
-            const processedUrl = await removeBackground(file);
-
-            // 2. Convert Blob URL back to File for Cloudinary Upload
-            const response = await fetch(processedUrl);
-            const blob = await response.blob();
-            const processedFile = new File([blob], file.name, { type: 'image/png' });
-
-            // 3. Upload to Cloudinary
-            const data = await uploadImage(processedFile);
+            // Upload directly to Cloudinary without background removal
+            const data = await uploadImage(file);
             setUploadedImages(prev => [...prev, data.url]);
-            toast.success('Image processed & uploaded', { id: loadingToast });
+            toast.success('Image uploaded successfully', { id: loadingToast });
         } catch (error) {
             console.error('Upload failed:', error);
-            // Fallback: Upload original if BG removal fails
-            try {
-                const data = await uploadImage(file);
-                setUploadedImages(prev => [...prev, data.url]);
-                toast.success('Uploaded (BG removal skipped)', { id: loadingToast });
-            } catch {
-                toast.error('Failed to upload image', { id: loadingToast });
-            }
+            toast.error('Failed to upload image', { id: loadingToast });
         } finally {
             setIsUploading(false);
         }
